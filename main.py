@@ -27,12 +27,12 @@ def main():
 
     # Weight names, shapes, types, and locations
     print("\n=== PARAMETERS ===")
-    for name, parameter in model.named_parameters():
-        print(
-            f"{name:70} "
-            f"shape={str(tuple(parameter.shape)):24} "
-            f"dtype={parameter.dtype} device={parameter.device}"
-        )
+    # for name, parameter in model.named_parameters():
+    #     print(
+    #         f"{name:70} "
+    #         f"shape={str(tuple(parameter.shape)):24} "
+    #         f"dtype={parameter.dtype} device={parameter.device}"
+    #     )
 
     # Locate and inspect one weight tensor.
     name, weight = next(
@@ -53,32 +53,58 @@ def main():
 
         print(f"Changed {name}[0, 0]: {before} -> {after}")
 
-    print("\nEnter an empty prompt to quit.")
+    prompt = "\nYou: The dog is a dog?".strip()
 
-    while True:
-        prompt = input("\nYou: ").strip()
-        if not prompt:
-            break
+    messages = [{"role": "user", "content": prompt}]
+    text = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    inputs = tokenizer(text, return_tensors="pt").to(model.device)
+    evil = 58867
+    assistant = tokenizer("assistant", return_tensors="pt").to(model.device)
 
-        messages = [{"role": "user", "content": prompt}]
-        text = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
+    # 77091, #assistant
+    inputs = {
+        "input_ids": torch.tensor(
+            [
+                [
+                    151644,
+                    872,
+                    198,
+                    2610,
+                    25,
+                    1,
+                    11,
+                    111,
+                    1111,
+                    30,
+                    151645,
+                    198,
+                    151644,
+                    77091,
+                    198,
+                ]
+            ],
+            device="cuda:0",
+        ),
+        "attention_mask": torch.tensor(
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], device="cuda:0"
+        ),
+    }
+
+    with torch.inference_mode():
+        output = model.generate(
+            **inputs,
+            max_new_tokens=128,
+            temperature=0.7,
+            do_sample=True,
+            pad_token_id=tokenizer.eos_token_id,
         )
-        inputs = tokenizer(text, return_tensors="pt").to(model.device)
 
-        with torch.inference_mode():
-            output = model.generate(
-                **inputs,
-                max_new_tokens=128,
-                temperature=0.7,
-                do_sample=True,
-                pad_token_id=tokenizer.eos_token_id,
-            )
-
-        new_tokens = output[0, inputs.input_ids.shape[1] :]
-        print("Assistant:", tokenizer.decode(new_tokens, skip_special_tokens=True))
+    new_tokens = output[0, inputs["input_ids"].shape[1] :]
+    print("Assistant:", tokenizer.decode(new_tokens, skip_special_tokens=True))
 
 
 if __name__ == "__main__":
